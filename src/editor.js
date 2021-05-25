@@ -1,5 +1,9 @@
-const fs = remote.require('fs');
-const { BrowserWindow, dialog } = remote;
+'use strict';
+
+/* アプリケーションモジュールの読み込み */
+const {BrowserWindow, dialog} = require('electron').remote;
+const {ipcRenderer} = require('electron');
+const fs = require('fs');
 
 let inputArea = null;
 let inputTxt = null;
@@ -46,18 +50,35 @@ function onLoad()
         readFile(file.path);
     });
 
-    document.querySelector('#btnLoad').addEventListener('click', () => {
-        openLoadFile();
-    });
-    document.querySelector('#btnSave').addEventListener('click', () => {
-        saveFile();
+    // IPCでメッセージを受信してファイルの制御を行う
+    ipcRenderer.on('main_file_message', (event, arg) => {
+        console.log(arg);
+        if(arg) {
+        switch(arg) {
+            case 'open':
+                // ファイルを開く
+                loadFile();
+                break;
+            case 'save':
+                // ファイルを保存
+                saveFile();
+                break;
+            case 'saveas':
+                // 名前を付けてファイルを保存
+                saveNewFile();
+                break;
+            }
+        }
     });
 };
 
-function openLoadFile() {
+function loadFile() {
     const win = BrowserWindow.getFocusedWindow();
     dialog.showOpenDialog(win, {
         properties: ['openFile'],
+        title: 'ファイルを開く',
+        defaultPath: currentPath,
+        multiSelections: false,
         filters: [
             {
                 name: 'Documents',
@@ -65,7 +86,8 @@ function openLoadFile() {
             }
         ]
     }).then(result => {
-        if (!result.canceled) {
+        /* ファイルを開く */
+        if (!result.canceled && result.filePaths && result.filePaths.hasOwnProperty(0)) {
             readFile(result.filePaths[0]);
         }
     }).catch(err => {
@@ -98,7 +120,7 @@ function saveFile() {
         title: 'ファイルの上書き保存を行います。',
         type: 'info',
         buttons: ['OK', 'Cancel'],
-        detail: '本当に保存しますか？'
+        detail: 'ファイルを上書き保存します。よろしいですか？'
     }).then(result => {
         if (result.response === 0) {
             const data = editor.getValue();
@@ -125,7 +147,10 @@ function writeFile(path, data)
 function saveNewFile() {
     const win = BrowserWindow.getFocusedWindow();
     dialog.showSaveDialog(win, {
-        properties: ['openFile'],
+        properties: ['saveFile'],
+        title: '名前を付けて保存',
+        defaultPath: currentPath,
+        multiSelections: false,
         filters: [
             {
                 name: 'Documents',
@@ -133,7 +158,7 @@ function saveNewFile() {
             }
         ]
     }).then(result => {
-        if (!result.canceled) {
+        if (!result.canceled && result.filePath) {
             const data = editor.getValue();
             currentPath = result.filePath;
             writeFile(currentPath, data);
